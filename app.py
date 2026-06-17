@@ -316,13 +316,29 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_text
+        )
+    )
 
     app.job_queue.run_repeating(job, interval=10, first=5)
     app.job_queue.run_repeating(cleanup_panels, interval=10, first=10)
 
-    print("Bot running...")
-    app.run_polling()
+    PORT = int(os.environ.get("PORT", 10000))
+    RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
+
+    print("Bot running with webhook...")
+
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=TOKEN,
+        webhook_url=f"{RENDER_URL}/{TOKEN}",
+        drop_pending_updates=True,
+    )
+
 
 if __name__ == "__main__":
     main()
