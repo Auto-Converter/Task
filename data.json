@@ -1,0 +1,32 @@
+{
+    "chats": {
+        "7579778610": {
+            "tasks": [
+                {
+                    "id": "3a3fd0e7-f208-40de-9355-836f6a8465bd",
+                    "name": "meow",
+                    "type": "meow",
+                    "user_id": 7579778610,
+                    "chat_id": "7579778610",
+                    "next_run": 1781706027.4811885,
+                    "interval": 300,
+                    "active": true
+                }
+            ]
+        },
+        "-1003607876243": {
+            "tasks": [
+                {
+                    "id": "96eaf022-24e4-4ab5-9899-e523a1a7e827",
+                    "name": "fish",
+                    "type": "fish",
+                    "user_id": 7579778610,
+                    "chat_id": "-1003607876243",
+                    "next_run": 1781705923.4734066,
+                    "interval": 900,
+                    "active": true
+                }
+            ]
+        }
+    }
+}
