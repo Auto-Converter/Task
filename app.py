@@ -16,7 +16,7 @@ from telegram.ext import (
 
 # ---------------- CONFIG ----------------
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("TOKEN")
 DATA_FILE = "data.json"
 
 INTERVALS = {
@@ -125,7 +125,7 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---------- PRESET ----------
     if q.data.startswith("preset:"):
         t = q.data.split(":")[1]
-        await q.message.reply_text("⏱ چند دقیقه؟")
+        await q.message.reply_text("⏱ تا دفعه بعد چقدر مونده؟ ")
 
         waiting[(chat_id, user_id)] = {"step": "preset", "type": t}
 
@@ -150,7 +150,7 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"• {t['name']}\n"
 
                 keyboard.append([
-                    InlineKeyboardButton("❌ حذف", callback_data=f"del:{t['id']}"),
+                    InlineKeyboardButton("❌ del", callback_data=f"del:{t['id']}"),
                     InlineKeyboardButton("⛔ stop", callback_data=f"stop:{t['id']}")
                 ])
 
@@ -175,7 +175,7 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if task["id"] == task_id and task["user_id"] == user_id:
                 chat["tasks"].remove(task)
                 save(data)
-                await q.message.reply_text("🗑 حذف شد")
+                await q.message.reply_text("🗑 deleted ")
                 return
 
     # ---------- STOP ----------
@@ -193,7 +193,7 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 task["active"] = False
                 task["next_run"] = float("inf")
                 save(data)
-                await q.message.reply_text("⛔ متوقف شد")
+                await q.message.reply_text("⛔  stoped")
                 return
 
 # ---------------- TEXT FLOW ----------------
@@ -244,7 +244,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif state["step"] == "delay":
         state["delay"] = parse_time(text)
         state["step"] = "repeat"
-        await update.message.reply_text("🔁 تکرار؟")
+        await update.message.reply_text("🔁 هر چند دقیقه یکبار تکرار شود؟")
         waiting[key] = state
 
     # ---------- FINAL ----------
@@ -316,29 +316,20 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback))
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handle_text
-        )
-    )
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     app.job_queue.run_repeating(job, interval=10, first=5)
     app.job_queue.run_repeating(cleanup_panels, interval=10, first=10)
 
-    PORT = int(os.environ.get("PORT", 10000))
-    RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
+    print("Bot running (WEBHOOK MODE)...")
 
-    print("Bot running with webhook...")
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # مثلا: https://yourdomain.com
+    PORT = int(os.getenv("PORT", "8443"))
+    PATH = f"/webhook/{TOKEN}"
 
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path=TOKEN,
-        webhook_url=f"{RENDER_URL}/{TOKEN}",
-        drop_pending_updates=True,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
     )
-
-
-if __name__ == "__main__":
-    main()
