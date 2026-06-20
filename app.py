@@ -17,6 +17,8 @@ from telegram.ext import (
 # ---------------- CONFIG ----------------
 
 TOKEN = os.getenv("TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+
 DATA_FILE = "data.json"
 
 INTERVALS = {
@@ -26,17 +28,14 @@ INTERVALS = {
 }
 
 waiting = {}
-panel_owner = {}  # message_id -> {user_id, time}
+panel_owner = {}
 
 # ---------------- FILE ----------------
 
 def load():
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if "chats" not in data:
-                data["chats"] = {}
-            return data
+            return json.load(f)
     except:
         return {"chats": {}}
 
@@ -76,35 +75,6 @@ def menu():
         [InlineKeyboardButton("📋 List Tasks", callback_data="list")]
     ])
 
-# ---------------- ALERT (FIXED) ----------------
-
-async def alert(context, q, text):
-    try:
-        await context.bot.answer_callback_query(
-            callback_query_id=q.id,
-            text=text,
-            show_alert=True
-        )
-    except:
-        pass
-
-# ---------------- PANEL CHECK ----------------
-
-def validate_panel(q, user_id):
-    msg_id = q.message.message_id
-    panel = panel_owner.get(msg_id)
-
-    if not panel:
-        return False, "پنل معتبر نیست"
-
-    if time.time() - panel["time"] > 30:
-        return False, "پنل منقضی شده"
-
-    if panel["user_id"] != user_id:
-        return False, "این پنل برای شما نیست"
-
-    return True, None
-
 # ---------------- START ----------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -122,33 +92,22 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load()
     chat = get_chat(data, chat_id)
 
-    # ---------- PRESET ----------
     if q.data.startswith("preset:"):
         t = q.data.split(":")[1]
-        await q.message.reply_text("⏱ تا دفعه بعد چقدر مونده؟ ")
-
+        await q.message.reply_text("⏱ زمان؟")
         waiting[(chat_id, user_id)] = {"step": "preset", "type": t}
 
-    # ---------- NEW ----------
     elif q.data == "new":
         await q.message.reply_text("📝 اسم تسک؟")
-
         waiting[(chat_id, user_id)] = {"step": "name"}
 
-    # ---------- LIST ----------
     elif q.data == "list":
-
-        if not chat["tasks"]:
-            await q.message.reply_text("❌ خالیه")
-            return
-
         text = "📋 Tasks:\n\n"
         keyboard = []
 
         for t in chat["tasks"]:
             if t["user_id"] == user_id:
                 text += f"• {t['name']}\n"
-
                 keyboard.append([
                     InlineKeyboardButton("❌ del", callback_data=f"del:{t['id']}"),
                     InlineKeyboardButton("⛔ stop", callback_data=f"stop:{t['id']}")
@@ -161,45 +120,9 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "time": time.time()
         }
 
-    # ---------- DELETE ----------
-    elif q.data.startswith("del:"):
-
-        ok, err = validate_panel(q, user_id)
-        if not ok:
-            await alert(context, q, err)
-            return
-
-        task_id = q.data.split(":")[1]
-
-        for task in chat["tasks"]:
-            if task["id"] == task_id and task["user_id"] == user_id:
-                chat["tasks"].remove(task)
-                save(data)
-                await q.message.reply_text("🗑 deleted ")
-                return
-
-    # ---------- STOP ----------
-    elif q.data.startswith("stop:"):
-
-        ok, err = validate_panel(q, user_id)
-        if not ok:
-            await alert(context, q, err)
-            return
-
-        task_id = q.data.split(":")[1]
-
-        for task in chat["tasks"]:
-            if task["id"] == task_id and task["user_id"] == user_id:
-                task["active"] = False
-                task["next_run"] = float("inf")
-                save(data)
-                await q.message.reply_text("⛔  stoped")
-                return
-
 # ---------------- TEXT FLOW ----------------
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     chat_id = str(update.effective_chat.id)
     user_id = update.effective_user.id
     key = (chat_id, user_id)
@@ -213,15 +136,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load()
     chat = get_chat(data, chat_id)
 
-    # ---------- PRESET ----------
     if state["step"] == "preset":
-
         task = {
             "id": str(uuid.uuid4()),
             "name": state["type"],
-            "type": state["type"],
             "user_id": user_id,
-            "chat_id": chat_id,
             "next_run": time.time() + parse_time(text),
             "interval": INTERVALS[state["type"]],
             "active": True
@@ -233,29 +152,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ ساخته شد")
         del waiting[key]
 
-    # ---------- NAME ----------
     elif state["step"] == "name":
         state["task_name"] = text
         state["step"] = "delay"
-        await update.message.reply_text("⏱ زمان؟")
         waiting[key] = state
+        await update.message.reply_text("⏱ زمان؟")
 
-    # ---------- DELAY ----------
     elif state["step"] == "delay":
         state["delay"] = parse_time(text)
         state["step"] = "repeat"
-        await update.message.reply_text("🔁 هر چند دقیقه یکبار تکرار شود؟")
         waiting[key] = state
+        await update.message.reply_text("🔁 تکرار؟")
 
-    # ---------- FINAL ----------
     elif state["step"] == "repeat":
-
         task = {
             "id": str(uuid.uuid4()),
             "name": state["task_name"],
-            "type": "custom",
             "user_id": user_id,
-            "chat_id": chat_id,
             "next_run": time.time() + state["delay"],
             "interval": parse_time(text),
             "active": True
@@ -270,14 +183,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------- JOB ----------------
 
 async def job(context: ContextTypes.DEFAULT_TYPE):
-
     data = load()
     now = time.time()
 
-    for chat_id, chat in list(data["chats"].items()):
-
-        for task in chat["tasks"][:]:
-
+    for chat_id, chat in data["chats"].items():
+        for task in chat["tasks"]:
             if not task.get("active"):
                 continue
 
@@ -287,29 +197,24 @@ async def job(context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"⏰ [{task['name']}](tg://user?id={task['user_id']}) وقتشه!",
-                    parse_mode="Markdown"
+                    text=f"⏰ [{task['name']}] time!"
                 )
             except:
                 continue
 
-            if task["interval"] > 0:
-                task["next_run"] = now + task["interval"]
-            else:
-                task["active"] = False
+            task["next_run"] = now + task["interval"]
 
     save(data)
 
 # ---------------- CLEANUP ----------------
 
-async def cleanup_panels(context: ContextTypes.DEFAULT_TYPE):
+async def cleanup(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
-
     for msg_id in list(panel_owner.keys()):
         if now - panel_owner[msg_id]["time"] > 30:
             del panel_owner[msg_id]
 
-# ---------------- MAIN ----------------
+# ---------------- MAIN (WEBHOOK SAFE) ----------------
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -319,12 +224,9 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     app.job_queue.run_repeating(job, interval=10, first=5)
-    app.job_queue.run_repeating(cleanup_panels, interval=10, first=10)
+    app.job_queue.run_repeating(cleanup, interval=10, first=10)
 
-    print("Bot running on webhook...")
-
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-    PORT = int(os.getenv("PORT", "10000"))
+    PORT = int(os.getenv("PORT", 10000))
 
     app.run_webhook(
         listen="0.0.0.0",
@@ -333,6 +235,7 @@ def main():
         webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
     )
 
+# ---------------- ENTRY ----------------
 
 if __name__ == "__main__":
-    main() 
+    main()
