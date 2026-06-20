@@ -321,11 +321,10 @@ def main():
     app.job_queue.run_repeating(job, interval=10, first=5)
     app.job_queue.run_repeating(cleanup_panels, interval=10, first=10)
 
-    print("Bot running (WEBHOOK MODE)...")
+    print("Bot running on webhook...")
 
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # مثلا: https://yourdomain.com
-    PORT = int(os.getenv("PORT", "8443"))
-    PATH = f"/webhook/{TOKEN}"
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+    PORT = int(os.getenv("PORT", "10000"))
 
     app.run_webhook(
         listen="0.0.0.0",
@@ -333,3 +332,7 @@ def main():
         url_path=TOKEN,
         webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
     )
+
+
+if __name__ == "__main__":
+    main() 
